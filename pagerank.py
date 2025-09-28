@@ -57,7 +57,21 @@ def transition_model(corpus, page, damping_factor):
     linked to by `page`. With probability `1 - damping_factor`, choose
     a link at random chosen from all pages in the corpus.
     """
-    raise NotImplementedError
+    pages = list(corpus.keys())
+    n = len(pages)
+    distribution = {p: (1 - damping_factor) / n for p in pages}
+
+    links = corpus.get(page, set())
+    # If no outgoing links, treat it as linking to all pages
+    if not links:
+        for p in pages:
+            distribution[p] += damping_factor / n
+    else:
+        k = len(links)
+        for p in links:
+            distribution[p] += damping_factor / k
+
+    return distribution
 
 
 def sample_pagerank(corpus, damping_factor, n):
@@ -69,7 +83,24 @@ def sample_pagerank(corpus, damping_factor, n):
     their estimated PageRank value (a value between 0 and 1). All
     PageRank values should sum to 1.
     """
-    raise NotImplementedError
+    counts = {p: 0 for p in corpus}
+    pages = list(corpus.keys())
+
+    # First sample: choose a page at random
+    current = random.choice(pages)
+    counts[current] += 1
+
+    # Sample based on transition model
+    for _ in range(1, n):
+        dist = transition_model(corpus, current, damping_factor)
+        choices = list(dist.keys())
+        weights = [dist[p] for p in choices]
+        current = random.choices(choices, weights=weights, k=1)[0]
+        counts[current] += 1
+
+    # Convert counts to probabilities
+    pagerank = {p: counts[p] / n for p in corpus}
+    return pagerank
 
 
 def iterate_pagerank(corpus, damping_factor):
@@ -81,7 +112,44 @@ def iterate_pagerank(corpus, damping_factor):
     their estimated PageRank value (a value between 0 and 1). All
     PageRank values should sum to 1.
     """
-    raise NotImplementedError
+    pages = list(corpus.keys())
+    n = len(pages)
+
+    # Initialize all ranks equally
+    ranks = {p: 1 / n for p in pages}
+
+    # Identify dangling pages (no links)
+    dangling = {p for p, links in corpus.items() if len(links) == 0}
+
+    while True:
+        new_ranks = {}
+        for p in pages:
+            # Base rank from random jump
+            rank = (1 - damping_factor) / n
+
+            # Contribution from dangling pages
+            if dangling:
+                rank += damping_factor * sum(ranks[d] / n for d in dangling)
+
+            # Contribution from pages linking to p
+            for q, links in corpus.items():
+                if len(links) > 0 and p in links:
+                    rank += damping_factor * (ranks[q] / len(links))
+
+            new_ranks[p] = rank
+
+        # Check if all changes are <= 0.001
+        if all(abs(new_ranks[p] - ranks[p]) <= 0.001 for p in pages):
+            ranks = new_ranks
+            break
+
+        ranks = new_ranks
+
+    # Normalize (just in case floating point math drifts)
+    total = sum(ranks.values())
+    ranks = {p: r / total for p, r in ranks.items()}
+
+    return ranks
 
 
 if __name__ == "__main__":
